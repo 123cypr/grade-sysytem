@@ -135,7 +135,7 @@ cur.close(); conn.close()
 ## 7. 实验步骤（面向小白）
 
 1. 安装 MySQL 8.0+，确认命令行 `mysql` 可用。
-2. 克隆仓库并进入目录：`cd grade-sysytem`。
+2. 克隆仓库并进入项目根目录（以实际克隆后的文件夹名为准）。
 3. 执行 `mysql -u root -p < sql/schema.sql` 初始化数据库。
 4. 登录 MySQL，运行示例查询验证视图/函数/存储过程：
    - `SELECT * FROM v_student_transcript WHERE student_no='2023001';`
