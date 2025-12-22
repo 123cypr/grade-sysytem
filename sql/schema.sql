@@ -162,7 +162,7 @@ CREATE TRIGGER trg_enrollments_before_upd
 BEFORE UPDATE ON enrollments
 FOR EACH ROW
 BEGIN
-  IF NEW.score IS NOT NULL AND (NEW.score <> OLD.score OR OLD.grade_point IS NULL) THEN
+  IF NEW.score IS NOT NULL AND (OLD.score IS NULL OR NEW.score <> OLD.score OR OLD.grade_point IS NULL) THEN
     SET NEW.grade_point = CASE
       WHEN NEW.score >= 90 THEN 4.0
       WHEN NEW.score >= 85 THEN 3.7
