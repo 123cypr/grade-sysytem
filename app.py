@@ -2,7 +2,7 @@ import os
 import secrets
 from functools import wraps
 
-from flask import Flask, g, jsonify, request
+from flask import Flask, abort, g, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -98,7 +98,7 @@ def require_auth(roles: list[str] | None = None):
             user_id = tokens.get(token)
             if not user_id:
                 return jsonify({"error": "unauthorized"}), 401
-            user = User.query.get(user_id)
+            user = db.session.get(User, user_id)
             if not user:
                 return jsonify({"error": "unauthorized"}), 401
             if roles and user.role not in roles:
@@ -116,6 +116,13 @@ def parse_body():
     if payload is None:
         return None, (jsonify({"error": "invalid or missing JSON body"}), 400)
     return payload, None
+
+
+def get_instance_or_404(model, object_id):
+    instance = db.session.get(model, object_id)
+    if not instance:
+        abort(404)
+    return instance
 
 
 def student_accessible(student_id: int, user: User) -> bool:
@@ -166,7 +173,7 @@ def list_classes():
 @app.put("/classes/<int:class_id>")
 @require_auth(["teacher"])
 def update_class(class_id: int):
-    classroom = Class.query.get_or_404(class_id)
+    classroom = get_instance_or_404(Class, class_id)
     payload, error = parse_body()
     if error:
         return error
@@ -180,7 +187,7 @@ def update_class(class_id: int):
 @app.delete("/classes/<int:class_id>")
 @require_auth(["teacher"])
 def delete_class(class_id: int):
-    classroom = Class.query.get_or_404(class_id)
+    classroom = get_instance_or_404(Class, class_id)
     db.session.delete(classroom)
     db.session.commit()
     return jsonify({"status": "deleted"})
@@ -200,7 +207,7 @@ def create_student():
         return jsonify({"error": "name, class_id, username, password required"}), 400
     if User.query.filter_by(username=username).first():
         return jsonify({"error": "username already exists"}), 400
-    Class.query.get_or_404(class_id)
+    get_instance_or_404(Class, class_id)
     student = Student(name=name, class_id=class_id)
     db.session.add(student)
     db.session.flush()
@@ -231,7 +238,7 @@ def list_students():
 @app.put("/students/<int:student_id>")
 @require_auth(["teacher"])
 def update_student(student_id: int):
-    student = Student.query.get_or_404(student_id)
+    student = get_instance_or_404(Student, student_id)
     payload, error = parse_body()
     if error:
         return error
@@ -240,7 +247,7 @@ def update_student(student_id: int):
     if name:
         student.name = name
     if class_id:
-        Class.query.get_or_404(class_id)
+        get_instance_or_404(Class, class_id)
         student.class_id = class_id
     db.session.commit()
     return jsonify({"id": student.id, "name": student.name, "class_id": student.class_id})
@@ -249,7 +256,7 @@ def update_student(student_id: int):
 @app.delete("/students/<int:student_id>")
 @require_auth(["teacher"])
 def delete_student(student_id: int):
-    student = Student.query.get_or_404(student_id)
+    student = get_instance_or_404(Student, student_id)
     db.session.delete(student)
     db.session.commit()
     return jsonify({"status": "deleted"})
@@ -282,7 +289,7 @@ def list_courses():
 @app.put("/courses/<int:course_id>")
 @require_auth(["teacher"])
 def update_course(course_id: int):
-    course = Course.query.get_or_404(course_id)
+    course = get_instance_or_404(Course, course_id)
     payload, error = parse_body()
     if error:
         return error
@@ -296,7 +303,7 @@ def update_course(course_id: int):
 @app.delete("/courses/<int:course_id>")
 @require_auth(["teacher"])
 def delete_course(course_id: int):
-    course = Course.query.get_or_404(course_id)
+    course = get_instance_or_404(Course, course_id)
     db.session.delete(course)
     db.session.commit()
     return jsonify({"status": "deleted"})
@@ -319,8 +326,8 @@ def upsert_grade():
         return jsonify({"error": "score must be a number"}), 400
     if not 0 <= score_value <= 100:
         return jsonify({"error": "score must be between 0 and 100"}), 400
-    Student.query.get_or_404(student_id)
-    Course.query.get_or_404(course_id)
+    get_instance_or_404(Student, student_id)
+    get_instance_or_404(Course, course_id)
     grade = Grade.query.filter_by(student_id=student_id, course_id=course_id).first()
     if grade:
         grade.score = score_value
@@ -346,7 +353,7 @@ def student_grades(student_id: int):
     user = g.current_user
     if not student_accessible(student_id, user):
         return jsonify({"error": "forbidden"}), 403
-    student = Student.query.get_or_404(student_id)
+    student = get_instance_or_404(Student, student_id)
     grades, total, average, count = grade_summary_for_student(student_id)
     return jsonify(
         {
@@ -362,7 +369,7 @@ def student_grades(student_id: int):
 @app.get("/classes/<int:class_id>/ranking")
 @require_auth(["teacher"])
 def class_ranking(class_id: int):
-    Class.query.get_or_404(class_id)
+    get_instance_or_404(Class, class_id)
     students = Student.query.filter_by(class_id=class_id).all()
     ranking = []
     for student in students:
@@ -376,7 +383,7 @@ def class_ranking(class_id: int):
                 "grade_count": count,
             }
         )
-    ranking.sort(key=lambda item: (item["total"], item["average"] if item["average"] is not None else 0), reverse=True)
+    ranking.sort(key=lambda item: (item["average"] if item["average"] is not None else 0, item["total"]), reverse=True)
     for index, item in enumerate(ranking, start=1):
         item["rank"] = index
     return jsonify(ranking)
