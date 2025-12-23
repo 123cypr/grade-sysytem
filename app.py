@@ -2,7 +2,7 @@ import os
 import secrets
 from functools import wraps
 
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -103,7 +103,7 @@ def require_auth(roles: list[str] | None = None):
                 return jsonify({"error": "unauthorized"}), 401
             if roles and user.role not in roles:
                 return jsonify({"error": "forbidden"}), 403
-            request.user = user
+            g.current_user = user
             return func(*args, **kwargs)
 
         return wrapper
@@ -173,7 +173,7 @@ def update_class(class_id: int):
     name = payload.get("name")
     if name:
         classroom.name = name
-        db.session.commit()
+    db.session.commit()
     return jsonify({"id": classroom.id, "name": classroom.name})
 
 
@@ -289,7 +289,7 @@ def update_course(course_id: int):
     name = payload.get("name")
     if name:
         course.name = name
-        db.session.commit()
+    db.session.commit()
     return jsonify({"id": course.id, "name": course.name})
 
 
@@ -343,7 +343,7 @@ def grade_summary_for_student(student_id: int):
 @app.get("/students/<int:student_id>/grades")
 @require_auth(["teacher", "student"])
 def student_grades(student_id: int):
-    user = request.user
+    user = g.current_user
     if not student_accessible(student_id, user):
         return jsonify({"error": "forbidden"}), 403
     student = Student.query.get_or_404(student_id)
@@ -376,7 +376,7 @@ def class_ranking(class_id: int):
                 "grade_count": count,
             }
         )
-    ranking.sort(key=lambda item: (item["total"], item["average"] if item["average"] is not None else -1), reverse=True)
+    ranking.sort(key=lambda item: (item["total"], item["average"] if item["average"] is not None else 0), reverse=True)
     for index, item in enumerate(ranking, start=1):
         item["rank"] = index
     return jsonify(ranking)
