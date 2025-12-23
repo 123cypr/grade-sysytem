@@ -313,13 +313,19 @@ def upsert_grade():
     score = payload.get("score")
     if student_id is None or course_id is None or score is None:
         return jsonify({"error": "student_id, course_id, score required"}), 400
+    try:
+        score_value = float(score)
+    except (TypeError, ValueError):
+        return jsonify({"error": "score must be a number"}), 400
+    if not 0 <= score_value <= 100:
+        return jsonify({"error": "score must be between 0 and 100"}), 400
     Student.query.get_or_404(student_id)
     Course.query.get_or_404(course_id)
     grade = Grade.query.filter_by(student_id=student_id, course_id=course_id).first()
     if grade:
-        grade.score = score
+        grade.score = score_value
     else:
-        grade = Grade(student_id=student_id, course_id=course_id, score=score)
+        grade = Grade(student_id=student_id, course_id=course_id, score=score_value)
         db.session.add(grade)
     db.session.commit()
     return jsonify({"id": grade.id, "student_id": student_id, "course_id": course_id, "score": grade.score})
@@ -370,7 +376,7 @@ def class_ranking(class_id: int):
                 "grade_count": count,
             }
         )
-    ranking.sort(key=lambda item: item["total"], reverse=True)
+    ranking.sort(key=lambda item: (item["total"], item["average"] if item["average"] is not None else -1), reverse=True)
     for index, item in enumerate(ranking, start=1):
         item["rank"] = index
     return jsonify(ranking)
