@@ -76,10 +76,17 @@ class User(db.Model):
 
 def create_default_teacher() -> None:
     if not User.query.filter_by(role="teacher").first():
+        password = os.environ.get("DEFAULT_TEACHER_PASSWORD")
+        generated = False
+        if not password:
+            password = secrets.token_hex(4)
+            generated = True
         teacher = User(username="teacher", role="teacher")
-        teacher.set_password("teacher123")
+        teacher.set_password(password)
         db.session.add(teacher)
         db.session.commit()
+        if generated:
+            app.logger.info("Default teacher created with password: %s", password)
 
 
 def require_auth(roles: list[str] | None = None):
@@ -104,13 +111,22 @@ def require_auth(roles: list[str] | None = None):
     return decorator
 
 
+def parse_body():
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return None, (jsonify({"error": "invalid or missing JSON body"}), 400)
+    return payload, None
+
+
 def student_accessible(student_id: int, user: User) -> bool:
     return user.role == "teacher" or (user.role == "student" and user.student_id == student_id)
 
 
 @app.post("/login")
 def login():
-    payload = request.get_json(force=True)
+    payload, error = parse_body()
+    if error:
+        return error
     username = payload.get("username")
     password = payload.get("password")
     if not username or not password:
@@ -126,7 +142,9 @@ def login():
 @app.post("/classes")
 @require_auth(["teacher"])
 def create_class():
-    payload = request.get_json(force=True)
+    payload, error = parse_body()
+    if error:
+        return error
     name = payload.get("name")
     if not name:
         return jsonify({"error": "name required"}), 400
@@ -149,7 +167,9 @@ def list_classes():
 @require_auth(["teacher"])
 def update_class(class_id: int):
     classroom = Class.query.get_or_404(class_id)
-    payload = request.get_json(force=True)
+    payload, error = parse_body()
+    if error:
+        return error
     name = payload.get("name")
     if name:
         classroom.name = name
@@ -169,7 +189,9 @@ def delete_class(class_id: int):
 @app.post("/students")
 @require_auth(["teacher"])
 def create_student():
-    payload = request.get_json(force=True)
+    payload, error = parse_body()
+    if error:
+        return error
     name = payload.get("name")
     class_id = payload.get("class_id")
     username = payload.get("username")
@@ -210,7 +232,9 @@ def list_students():
 @require_auth(["teacher"])
 def update_student(student_id: int):
     student = Student.query.get_or_404(student_id)
-    payload = request.get_json(force=True)
+    payload, error = parse_body()
+    if error:
+        return error
     name = payload.get("name")
     class_id = payload.get("class_id")
     if name:
@@ -234,7 +258,9 @@ def delete_student(student_id: int):
 @app.post("/courses")
 @require_auth(["teacher"])
 def create_course():
-    payload = request.get_json(force=True)
+    payload, error = parse_body()
+    if error:
+        return error
     name = payload.get("name")
     if not name:
         return jsonify({"error": "name required"}), 400
@@ -257,7 +283,9 @@ def list_courses():
 @require_auth(["teacher"])
 def update_course(course_id: int):
     course = Course.query.get_or_404(course_id)
-    payload = request.get_json(force=True)
+    payload, error = parse_body()
+    if error:
+        return error
     name = payload.get("name")
     if name:
         course.name = name
@@ -277,7 +305,9 @@ def delete_course(course_id: int):
 @app.post("/grades")
 @require_auth(["teacher"])
 def upsert_grade():
-    payload = request.get_json(force=True)
+    payload, error = parse_body()
+    if error:
+        return error
     student_id = payload.get("student_id")
     course_id = payload.get("course_id")
     score = payload.get("score")
@@ -299,8 +329,9 @@ def grade_summary_for_student(student_id: int):
     grades = Grade.query.filter_by(student_id=student_id).all()
     scores = [g.score for g in grades]
     total = sum(scores)
-    average = total / len(scores) if scores else 0
-    return grades, total, average
+    count = len(scores)
+    average = total / count if count else None
+    return grades, total, average, count
 
 
 @app.get("/students/<int:student_id>/grades")
@@ -310,13 +341,14 @@ def student_grades(student_id: int):
     if not student_accessible(student_id, user):
         return jsonify({"error": "forbidden"}), 403
     student = Student.query.get_or_404(student_id)
-    grades, total, average = grade_summary_for_student(student_id)
+    grades, total, average, count = grade_summary_for_student(student_id)
     return jsonify(
         {
             "student": {"id": student.id, "name": student.name},
             "grades": [{"course": g.course.name, "score": g.score} for g in grades],
             "total": total,
             "average": average,
+            "grade_count": count,
         }
     )
 
@@ -328,8 +360,16 @@ def class_ranking(class_id: int):
     students = Student.query.filter_by(class_id=class_id).all()
     ranking = []
     for student in students:
-        _, total, average = grade_summary_for_student(student.id)
-        ranking.append({"student_id": student.id, "name": student.name, "total": total, "average": average})
+        _, total, average, count = grade_summary_for_student(student.id)
+        ranking.append(
+            {
+                "student_id": student.id,
+                "name": student.name,
+                "total": total,
+                "average": average,
+                "grade_count": count,
+            }
+        )
     ranking.sort(key=lambda item: item["total"], reverse=True)
     for index, item in enumerate(ranking, start=1):
         item["rank"] = index
