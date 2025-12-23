@@ -1,5 +1,6 @@
 import os
 import secrets
+import time
 from functools import wraps
 
 from flask import Flask, abort, g, jsonify, request
@@ -11,9 +12,11 @@ app = Flask(__name__)
 database_url = os.environ.get("DATABASE_URL", "sqlite:///data.db")
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 
 db = SQLAlchemy(app)
-tokens: dict[str, int] = {}
+TOKEN_TTL_SECONDS = int(os.environ.get("TOKEN_TTL_SECONDS", "43200"))
+tokens: dict[str, tuple[int, float]] = {}
 
 
 class Class(db.Model):
@@ -79,7 +82,7 @@ def create_default_teacher() -> None:
         password = os.environ.get("DEFAULT_TEACHER_PASSWORD")
         generated = False
         if not password:
-            password = secrets.token_hex(4)
+            password = secrets.token_hex(12)
             generated = True
         teacher = User(username="teacher", role="teacher")
         teacher.set_password(password)
@@ -94,9 +97,15 @@ def require_auth(roles: list[str] | None = None):
         @wraps(func)
         def wrapper(*args, **kwargs):
             auth_header = request.headers.get("Authorization", "")
+            if not auth_header.startswith("Bearer "):
+                return jsonify({"error": "unauthorized"}), 401
             token = auth_header.removeprefix("Bearer ").strip()
-            user_id = tokens.get(token)
-            if not user_id:
+            token_data = tokens.get(token)
+            if not token_data:
+                return jsonify({"error": "unauthorized"}), 401
+            user_id, issued_at = token_data
+            if time.time() - issued_at > TOKEN_TTL_SECONDS:
+                tokens.pop(token, None)
                 return jsonify({"error": "unauthorized"}), 401
             user = db.session.get(User, user_id)
             if not user:
@@ -142,7 +151,7 @@ def login():
     if not user or not user.check_password(password):
         return jsonify({"error": "invalid credentials"}), 401
     token = secrets.token_hex(16)
-    tokens[token] = user.id
+    tokens[token] = (user.id, time.time())
     return jsonify({"token": token, "role": user.role})
 
 
