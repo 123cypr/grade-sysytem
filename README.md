@@ -29,7 +29,7 @@
 - 成绩管理（教师权限）：  
   - `POST /grades` 成绩录入或修改（student_id, course_id, score）  
 - 查询统计：  
-- `GET /students/<id>/grades` 学生/教师查看个人成绩、总分、平均分  
-- `GET /classes/<id>/ranking` 教师查看班级排名  
+  - `GET /students/<id>/grades` 学生/教师查看个人成绩、总分、平均分  
+  - `GET /classes/<id>/ranking` 教师查看班级排名  
 
 调用接口时在请求头附带 `Authorization: Bearer <token>`。更多字段示例可参考接口的返回 JSON。无需额外建表，服务启动时会自动建表并创建默认教师账号。令牌存储在内存，默认有效期 12 小时（`TOKEN_TTL_SECONDS` 可配置），服务重启后需重新登录，生产部署请改为带过期时间的共享存储（如 Redis 或数据库）。

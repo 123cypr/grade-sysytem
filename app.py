@@ -16,6 +16,7 @@ app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 
 db = SQLAlchemy(app)
 TOKEN_TTL_SECONDS = int(os.environ.get("TOKEN_TTL_SECONDS", "43200"))
+# Demo-only token store. Use a shared persistent backend with expiry for production deployments.
 tokens: dict[str, tuple[int, float]] = {}
 
 
