@@ -5,6 +5,7 @@ from functools import wraps
 
 from flask import Flask, abort, g, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import func
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
@@ -90,7 +91,9 @@ def create_default_teacher() -> None:
         db.session.add(teacher)
         db.session.commit()
         if generated:
-            app.logger.info("Default teacher created with password: %s", password)
+            app.logger.info(
+                "Default teacher created; set DEFAULT_TEACHER_PASSWORD for predictable credentials"
+            )
 
 
 def require_auth(roles: list[str] | None = None):
@@ -98,9 +101,10 @@ def require_auth(roles: list[str] | None = None):
         @wraps(func)
         def wrapper(*args, **kwargs):
             auth_header = request.headers.get("Authorization", "")
-            if not auth_header.startswith("Bearer "):
+            parts = auth_header.split()
+            if len(parts) != 2 or parts[0] != "Bearer":
                 return jsonify({"error": "unauthorized"}), 401
-            token = auth_header.removeprefix("Bearer ").strip()
+            token = parts[1].strip()
             token_data = tokens.get(token)
             if not token_data:
                 return jsonify({"error": "unauthorized"}), 401
@@ -325,10 +329,13 @@ def upsert_grade():
     payload, error = parse_body()
     if error:
         return error
-    student_id = payload.get("student_id")
-    course_id = payload.get("course_id")
+    try:
+        student_id = int(payload.get("student_id"))
+        course_id = int(payload.get("course_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "student_id and course_id must be integers"}), 400
     score = payload.get("score")
-    if student_id is None or course_id is None or score is None:
+    if score is None:
         return jsonify({"error": "student_id, course_id, score required"}), 400
     try:
         score_value = float(score)
@@ -381,9 +388,24 @@ def student_grades(student_id: int):
 def class_ranking(class_id: int):
     get_instance_or_404(Class, class_id)
     students = Student.query.filter_by(class_id=class_id).all()
+    aggregates = (
+        db.session.query(
+            Grade.student_id,
+            func.sum(Grade.score).label("total"),
+            func.count(Grade.id).label("grade_count"),
+        )
+        .join(Student, Student.id == Grade.student_id)
+        .filter(Student.class_id == class_id)
+        .group_by(Grade.student_id)
+        .all()
+    )
+    aggregate_map = {row.student_id: row for row in aggregates}
     ranking = []
     for student in students:
-        _, total, average, count = grade_summary_for_student(student.id)
+        aggregate = aggregate_map.get(student.id)
+        total = float(aggregate.total) if aggregate and aggregate.total is not None else 0
+        count = int(aggregate.grade_count) if aggregate else 0
+        average = total / count if count else None
         ranking.append(
             {
                 "student_id": student.id,
