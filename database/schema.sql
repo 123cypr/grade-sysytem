@@ -146,3 +146,35 @@ CREATE TABLE IF NOT EXISTS sports_item (
   deleted TINYINT DEFAULT 0,
   CONSTRAINT fk_sport_exam_type FOREIGN KEY (exam_type_id) REFERENCES exam_type(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS score_change_log (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  score_id BIGINT NOT NULL,
+  student_id BIGINT NOT NULL,
+  exam_id BIGINT NOT NULL,
+  subject_id BIGINT NOT NULL,
+  old_score DECIMAL(6,2),
+  new_score DECIMAL(6,2),
+  status TINYINT DEFAULT 0 COMMENT '0=待审批 1=通过 2=驳回',
+  operator_id BIGINT,
+  approver_id BIGINT,
+  remark VARCHAR(255),
+  create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+  update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT DEFAULT 0,
+  CONSTRAINT fk_change_score FOREIGN KEY (score_id) REFERENCES score_info(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS score_consult (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  student_id BIGINT NOT NULL,
+  subject_id BIGINT,
+  exam_id BIGINT,
+  question TEXT,
+  reply TEXT,
+  status TINYINT DEFAULT 0 COMMENT '0=待回复 1=已回复',
+  teacher_id BIGINT,
+  create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+  update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
