@@ -31,7 +31,8 @@ CREATE DATABASE IF NOT EXISTS junior_score_management
 ### 3.2 核心表（关键字段）
 - `sys_user`：username, password(BCrypt), role_type(1=管理员/2=教师/3=学生/4=家长), status
 - `student_info`：student_no(唯一), name, class_id, grade(1/2/3), parent_id
-- `teacher_info`：teacher_no, name, subject_id, class_ids(逗号分隔)
+- `teacher_info`：teacher_no, name, subject_id；班级多对多关系通过 `teacher_class(teacher_id, class_id)` 关联
+- `teacher_class`：teacher_id, class_id（教师与班级关联表）
 - `subject_info`：name, full_score, is_total
 - `exam_type`：name, exam_time, is_rank, is_public
 - `score_info`：student_id, exam_id, subject_id, score, sports_items(JSON)，联合索引 `(student_id, exam_id, subject_id)`
@@ -39,7 +40,7 @@ CREATE DATABASE IF NOT EXISTS junior_score_management
 - `score_archive`：用于历史归档
 
 ### 3.3 额外要求
-- 体育中考分项示例：`{"跑步":30,"跳绳":15,"跳远":15}`，录入时自动汇总总分。
+- 体育中考分项示例：`{"跑步":30,"跳绳":15,"跳远":15}`，录入时自动汇总总分。`sports_items` JSON 期望 schema：key 为字符串分项名，value 为数字分值；需校验分项存在于配置表、分值不超该分项满分，总分不得超 `subject_info.full_score`。
 - 逻辑删除使用 `deleted`；毕业年级数据归档到 `score_archive`。
 
 ## 4. 后端设计要点
@@ -75,4 +76,4 @@ CREATE DATABASE IF NOT EXISTS junior_score_management
 - 管理员：配置体育分项（跑步30+跳绳15+跳远15），导入 5 名学生。
 - 教师：录入体育分项成绩，系统自动汇总总分并生成班级报表。
 - 学生/家长：登录查看体育中考成绩与排名，提交咨询并查看回复。
-- 性能：批量导入 1000 条成绩响应 ≤3s；并发 100 用户查询成绩响应 ≤1s。
+- 性能：批量导入 1000 条成绩响应 ≤3s；并发 100 用户查询成绩响应 ≤1s。测试基线环境建议：4 vCPU、8GB RAM、SSD（≥200MB/s），局域网/等效云同区部署。
