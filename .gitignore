@@ -1,0 +1,6 @@
+target/
+.idea/
+.vscode/
+node_modules/
+frontend/dist/
+backend/target/

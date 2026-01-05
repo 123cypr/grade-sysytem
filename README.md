@@ -80,6 +80,7 @@ CREATE DATABASE IF NOT EXISTS junior_score_management
 - 前端：`npm install && npm run build`，静态资源部署至 Nginx。
 - Nginx（示例）：启用 gzip，缓存 js/css/img，`/api` 反向代理至后端 8080。
 - 测试账号：管理员 `admin/123456`；教师 `teacher01/123456`；学生 `student01/123456`；家长 `parent01/123456`。初始化数据：3 年级、各 2 班、10 学生、5 教师、全学科、2 次考试（月考+体育中考）。
+- 本仓库骨架：`backend/` Spring Boot 3.2 + MyBatis-Plus；`database/schema.sql` 初始化表；`frontend/` Vue3 + Vite + Element Plus 脚手架，代理 `/api` 指向后端。
 
 ## 7. 核心功能验证
 - 管理员：配置体育分项（跑步30+跳绳15+跳远15），导入 5 名学生。
