@@ -12,7 +12,15 @@ export const useUserStore = defineStore('user', () => {
 
   function setRole(val) {
     role.value = val;
+    localStorage.setItem('role', val);
   }
 
-  return { token, role, setToken, setRole };
+  function restore() {
+    token.value = localStorage.getItem('token') || '';
+    role.value = localStorage.getItem('role') || '';
+  }
+
+  restore();
+
+  return { token, role, setToken, setRole, restore };
 });
